@@ -1,13 +1,15 @@
 import warnings
 from collections import Counter
 from itertools import count
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
 
-from heatgraphy import ClusterCanvas, Heatmap
+from heatgraphy import ClusterBoard, Heatmap
 from heatgraphy.layers import LayersMesh, FrameRect
 from heatgraphy.plotter import Labels, StackBar
+from heatgraphy.utils import get_canvas_size_by_data
 from .preset import SHAPE_BANK, MATCH_POOL, Alteration
 
 
@@ -35,6 +37,7 @@ class GenomicData:
                  patients_order=None,
                  tracks_order=None,
                  custom_pieces=None,
+                 background_color="#BEBEBE",
                  ):
         self.data = data.copy()
         self.data.columns = ['patient', 'track', 'event']
@@ -68,10 +71,12 @@ class GenomicData:
         self.data['event'] = [self.events_alt[e] for e in self.data['event']]
         self.events = self.data['event'].unique()
         if len(unknown_alterations) > 0:
-            warnings.warn(f"Found unknown alterations: {unknown_alterations}, "
-                          f"please specify a piece for this alteration.")
+            msg = f"Found unknown alterations: {unknown_alterations}, "\
+                  f"please specify a piece for this alteration."
+            warnings.warn(msg)
 
         self._shape = (len(self.tracks), len(self.patients))
+        self.background_color = background_color
 
     @property
     def shape(self):
@@ -88,7 +93,10 @@ class GenomicData:
             col_ix = self._patients_ix[patient]
             layers[event][row_ix, col_ix] = True
 
-        new_pieces = [SHAPE_BANK[Alteration.BACKGROUND]]
+        # explicitly make copy
+        bg_pieces = deepcopy(SHAPE_BANK[Alteration.BACKGROUND])
+        bg_pieces.background_color = self.background_color
+        new_pieces = [bg_pieces]
         new_layers = [np.ones(self._shape)]
         colors = []
         for alt in self.events:
@@ -98,19 +106,23 @@ class GenomicData:
                 if piece is None:
                     # The default style for OTHER
                     piece = FrameRect(color="pink", label=alt)
+                    piece.background_color = self.background_color
                     colors.append("pink")
                 else:
+                    piece = deepcopy(piece)
+                    piece.background_color = self.background_color
                     colors.append(piece.color)
                 new_pieces.append(piece)
             else:
-                p = SHAPE_BANK[alt]
+                p = deepcopy(SHAPE_BANK[alt])
+                p.background_color = self.background_color
                 new_pieces.append(p)
                 colors.append(p.color)
 
         return new_layers, new_pieces, colors
 
     def get_track_mutation_rate(self):
-        gb = self.data.groupby('track', sort=False)
+        gb = self.data.groupby('track', sort=False, observed=True)
         ts = {}
         for track, df in gb:
             ts[track] = len(df['patient'].unique())
@@ -118,15 +130,15 @@ class GenomicData:
         return counts / len(self.patients)
 
     def get_track_mutation_types(self):
-        gb = self.data.groupby('track', sort=False)
+        gb = self.data.groupby('track', sort=False, observed=True)
         cs = {}
         for track, df in gb:
             cs[track] = Counter(df['event'])
         types = [cs[t] for t in self.tracks]
-        return pd.DataFrame(types).loc[:, self.events].fillna(0.).T
+        return pd.DataFrame(types).loc[::-1, self.events].fillna(0.).T
 
     def get_patient_mutation_types(self):
-        gb = self.data.groupby('patient', sort=False)
+        gb = self.data.groupby('patient', sort=False, observed=True)
         cs = {}
         for track, df in gb:
             cs[track] = Counter(df['event'])
@@ -139,28 +151,31 @@ class OncoPrint:
     def __init__(self, genomic_data=None,
                  patients_order=None,
                  tracks_order=None,
+                 pieces=None,
                  background_color="#BEBEBE",
-                 # TODO: How to change background color
                  shrink=(.8, .8),
                  width=None,
                  height=None,
                  aspect=2.5,
                  legend_kws=None,
+                 name=None,
                  ):
         data = GenomicData(genomic_data,
                            patients_order=patients_order,
-                           tracks_order=tracks_order, )
-
-        Y, X = data.shape
-        main_aspect = Y * aspect / X
-        self.canvas = ClusterCanvas(
+                           tracks_order=tracks_order,
+                           custom_pieces=pieces,
+                           background_color=background_color)
+        self.data = data
+        width, height = get_canvas_size_by_data(
+            data.shape, width=width, height=height, scale=.2, aspect=aspect)
+        self.canvas = ClusterBoard(
+            name=name,
             cluster_data=np.zeros(data.shape),
-            width=width, height=height,
-            aspect=main_aspect)
+            width=width, height=height)
         layers, pieces, bar_colors = data.get_layers_pieces()
         track_names = data.tracks
 
-        legend_options = dict(handleheight=.8*aspect, handlelength=.8)
+        legend_options = dict(handleheight=aspect, handlelength=1)
         legend_kws = {} if legend_kws is None else legend_kws
         legend_options.update(legend_kws)
 
@@ -182,17 +197,18 @@ class OncoPrint:
         patients_counter = data.get_patient_mutation_types()
         patients_bar = StackBar(patients_counter, colors=bar_colors,
                                 show_value=False)
-        self.canvas.add_top(patients_bar, legend=False)
-
-    def append_expression(self, data, name=None):
-        h = Heatmap(data, )
-        if name is not None:
-            h.add_title(top=name, align="left")
-        self.canvas /= h
-
-    def append_clinical(self):
-        pass
+        self.canvas.add_top(patients_bar, legend=False, pad=.1)
 
     def render(self):
         self.canvas.add_legends()
         self.canvas.render()
+
+    @property
+    def patients_order(self):
+        return self.data.patients
+
+    @property
+    def tracks_order(self):
+        return self.data.tracks
+
+

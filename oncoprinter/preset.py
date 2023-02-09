@@ -4,7 +4,9 @@ from typing import List
 
 import numpy as np
 
-from heatgraphy.layers import Rect, FracRect, FrameRect, Piece
+import heatgraphy.layers as hl
+from matplotlib.patches import Rectangle
+from matplotlib.collections import PatchCollection
 
 # The preset follows the style of cBioPortal as much as possible
 # https://github.com/cBioPortal/cbioportal-frontend/blob/master/src/shared/components/oncoprint/geneticrules.ts
@@ -69,6 +71,32 @@ class Alteration(Enum):
     OTHER = 10000
 
 
+# Overwrite the default legend
+# So that the legend entry will add a background
+class _AltPiece:
+    background_color = None
+
+    def legend(self, x, y, w, h):
+        arts = []
+        if self.background_color is not None:
+            arts.append(
+                Rectangle((x, y), w, h, facecolor=self.background_color))
+        arts.append(self.draw(x, y, w, h, None))
+        return PatchCollection(arts, match_original=True)
+
+
+class Rect(_AltPiece, hl.Rect):
+    pass
+
+
+class FrameRect(_AltPiece, hl.FrameRect):
+    pass
+
+
+class FracRect(_AltPiece, hl.FracRect):
+    pass
+
+
 @dataclass(repr=False)
 class MatchRule:
     startswith: str = None
@@ -100,67 +128,107 @@ class MatchRule:
 MATCH_POOL = {
     Alteration.AMP: MatchRule(startswith='amp'),
     Alteration.GAIN: MatchRule(startswith='gain'),
-    Alteration.HOMDEL: MatchRule(startswith='homdel', contains=['deep', 'deletion'], flexible=True),
-    Alteration.HETLOSS: MatchRule(startswith='hetloss', contains=['shallow', 'deletion'], flexible=True),
+    Alteration.HOMDEL: MatchRule(startswith='homdel',
+                                 contains=['deep', 'deletion'], flexible=True),
+    Alteration.HETLOSS: MatchRule(startswith='hetloss',
+                                  contains=['shallow', 'deletion'],
+                                  flexible=True),
     Alteration.MRNA_HIGH: MatchRule(contains=['mrna', 'high']),
     Alteration.MRNA_LOW: MatchRule(contains=['mrna', 'low']),
     Alteration.PROTEIN_HIGH: MatchRule(contains=['protein', 'high']),
     Alteration.PROTEIN_LOW: MatchRule(contains=['protein', 'low']),
     Alteration.FUSION: MatchRule(startswith='fusion'),
     Alteration.GERMLINE: MatchRule(startswith='germline'),
-    Alteration.MISSENSE_PASSENGER: MatchRule(startswith='missense', contains=['passenger']),
-    Alteration.MISSENSE: MatchRule(startswith='missense', contains=['driver'], flexible=True),
+    Alteration.MISSENSE_PASSENGER: MatchRule(startswith='missense',
+                                             contains=['passenger']),
+    Alteration.MISSENSE: MatchRule(startswith='missense', contains=['driver'],
+                                   flexible=True),
 
     Alteration.PROMOTER: MatchRule(startswith='promoter'),
-    Alteration.TRUNC_PASSENGER: MatchRule(startswith='trunc', contains=['passenger']),
+    Alteration.TRUNC_PASSENGER: MatchRule(startswith='trunc',
+                                          contains=['passenger']),
     Alteration.TRUNC: MatchRule(startswith='trunc'),
-    Alteration.INFRAME_PASSENGER: MatchRule(startswith='inframe', contains=['passenger']),
+    Alteration.INFRAME_PASSENGER: MatchRule(startswith='inframe',
+                                            contains=['passenger']),
     Alteration.INFRAME: MatchRule(startswith='inframe'),
     Alteration.STRUCTURAL_VARIANT_PASSENGER: MatchRule(startswith='sv',
-                                                       contains=['structural', 'variant', 'passenger'],
+                                                       contains=['structural',
+                                                                 'variant',
+                                                                 'passenger'],
                                                        flexible=True),
-    Alteration.STRUCTURAL_VARIANT: MatchRule(startswith='sv', contains=['structural', 'variant'], flexible=True),
-    Alteration.SPLICE_PASSENGER: MatchRule(startswith='splice', contains=['passenger']),
+    Alteration.STRUCTURAL_VARIANT: MatchRule(startswith='sv',
+                                             contains=['structural',
+                                                       'variant'],
+                                             flexible=True),
+    Alteration.SPLICE_PASSENGER: MatchRule(startswith='splice',
+                                           contains=['passenger']),
     Alteration.SPLICE: MatchRule(startswith='splice'),
 }
 
 SHAPE_BANK = {
-    Alteration.BACKGROUND: Rect(color=DEFAULT_GREY, label="No alterations", zorder=-10000),
+    Alteration.BACKGROUND: Rect(color=DEFAULT_GREY, label="No alterations",
+                                zorder=-10000),
     # CNA
-    Alteration.AMP: Rect(color=CNA_COLOR_AMP, label="Amplification"),  # ShapeId.ampRectangle
-    Alteration.GAIN: Rect(color=CNA_COLOR_GAIN, label="Gain"),  # ShapeId.gainRectangle
+    Alteration.AMP: Rect(color=CNA_COLOR_AMP, label="Amplification"),
+    # ShapeId.ampRectangle
+    Alteration.GAIN: Rect(color=CNA_COLOR_GAIN, label="Gain"),
+    # ShapeId.gainRectangle
     Alteration.HOMDEL: Rect(color=CNA_COLOR_HOMDEL, label="Deep Deletion"),
-    Alteration.HETLOSS: Rect(color=CNA_COLOR_HETLOSS, label="Shallow Deletion"),
+    Alteration.HETLOSS: Rect(color=CNA_COLOR_HETLOSS,
+                             label="Shallow Deletion"),
     # mRNA Regulation
-    Alteration.MRNA_HIGH: FrameRect(color=MRNA_COLOR_HIGH, width=2, label="mRNA High", zorder=1000),
-    Alteration.MRNA_LOW: FrameRect(color=MRNA_COLOR_LOW, width=2, label="mRNA Low", zorder=1000),
+    Alteration.MRNA_HIGH: FrameRect(color=MRNA_COLOR_HIGH, width=.6,
+                                    label="mRNA High", zorder=1000),
+    Alteration.MRNA_LOW: FrameRect(color=MRNA_COLOR_LOW, width=.6,
+                                   label="mRNA Low", zorder=1000),
     # Protein Expression Regulation
-    Alteration.PROTEIN_HIGH: FracRect(color=PROT_COLOR_HIGH, frac=(1., .2), label="Protein High", zorder=20),
-    Alteration.PROTEIN_LOW: FracRect(color=PROT_COLOR_LOW, frac=(1., .2), label="Protein Low", zorder=20),
+    Alteration.PROTEIN_HIGH: FracRect(color=PROT_COLOR_HIGH, frac=(1., .2),
+                                      label="Protein High", zorder=20),
+    Alteration.PROTEIN_LOW: FracRect(color=PROT_COLOR_LOW, frac=(1., .2),
+                                     label="Protein Low", zorder=20),
     # Structural variant
-    Alteration.STRUCTURAL_VARIANT: FracRect(color=STRUCTURAL_VARIANT_COLOR, frac=(1., .6),
-                                            label="Structural variant", zorder=30),
-    Alteration.STRUCTURAL_VARIANT_PASSENGER: FracRect(color=STRUCTURAL_VARIANT_PASSENGER_COLOR, frac=(1., .6),
-                                                      label="Structural variant (putative passenger)", zorder=30),
-    Alteration.FUSION: FracRect(color=MUT_COLOR_FUSION, frac=(1., .6), label="Fusion", zorder=30),
+    Alteration.STRUCTURAL_VARIANT: FracRect(color=STRUCTURAL_VARIANT_COLOR,
+                                            frac=(1., .6),
+                                            label="Structural variant",
+                                            zorder=30),
+    Alteration.STRUCTURAL_VARIANT_PASSENGER: FracRect(
+        color=STRUCTURAL_VARIANT_PASSENGER_COLOR, frac=(1., .6),
+        label="Structural variant (putative passenger)", zorder=30),
+    Alteration.FUSION: FracRect(color=MUT_COLOR_FUSION, frac=(1., .6),
+                                label="Fusion", zorder=30),
     # Splice
-    Alteration.SPLICE: FracRect(color=MUT_COLOR_SPLICE, frac=(1., .3), label="Splice Mutation", zorder=40),
-    Alteration.SPLICE_PASSENGER: FracRect(color=MUT_COLOR_SPLICE_PASSENGER, frac=(1., .3),
-                                          label="Splice Mutation (putative passenger)", zorder=40),
+    Alteration.SPLICE: FracRect(color=MUT_COLOR_SPLICE, frac=(1., .3),
+                                label="Splice Mutation", zorder=40),
+    Alteration.SPLICE_PASSENGER: FracRect(color=MUT_COLOR_SPLICE_PASSENGER,
+                                          frac=(1., .3),
+                                          label="Splice Mutation (putative passenger)",
+                                          zorder=40),
 
     Alteration.MISSENSE: FracRect(color=MUT_COLOR_MISSENSE, frac=(1., .3),
-                                  label="Mutation (putative driver)", zorder=40),
-    Alteration.MISSENSE_PASSENGER: FracRect(color=MUT_COLOR_MISSENSE_PASSENGER, frac=(1., .3),
-                                            label="Missense Mutation (putative passenger)", zorder=40),
-    Alteration.OTHER: FracRect(color=MUT_COLOR_OTHER, frac=(1., .3), label="Other Mutation", zorder=40),
-    Alteration.PROMOTER: FracRect(color=MUT_COLOR_PROMOTER, frac=(1., .3), label="Promoter Mutation", zorder=40),
-    Alteration.TRUNC: FracRect(color=MUT_COLOR_TRUNC, frac=(1., .3), label="Truncating Mutation", zorder=40),
-    Alteration.TRUNC_PASSENGER: FracRect(color=MUT_COLOR_TRUNC_PASSENGER, frac=(1., .3),
-                                         label="Truncating Mutation (putative passenger)", zorder=40),
-    Alteration.INFRAME: FracRect(color=MUT_COLOR_INFRAME, frac=(1., .3), label="Inframe Mutation (putative driver)", zorder=40),
-    Alteration.INFRAME_PASSENGER: FracRect(color=MUT_COLOR_INFRAME_PASSENGER, frac=(1., .3),
-                                           label="Inframe Mutation (putative passenger)", zorder=40),
+                                  label="Mutation (putative driver)",
+                                  zorder=40),
+    Alteration.MISSENSE_PASSENGER: FracRect(color=MUT_COLOR_MISSENSE_PASSENGER,
+                                            frac=(1., .3),
+                                            label="Missense Mutation (putative passenger)",
+                                            zorder=40),
+    Alteration.OTHER: FracRect(color=MUT_COLOR_OTHER, frac=(1., .3),
+                               label="Other Mutation", zorder=40),
+    Alteration.PROMOTER: FracRect(color=MUT_COLOR_PROMOTER, frac=(1., .3),
+                                  label="Promoter Mutation", zorder=40),
+    Alteration.TRUNC: FracRect(color=MUT_COLOR_TRUNC, frac=(1., .3),
+                               label="Truncating Mutation", zorder=40),
+    Alteration.TRUNC_PASSENGER: FracRect(color=MUT_COLOR_TRUNC_PASSENGER,
+                                         frac=(1., .3),
+                                         label="Truncating Mutation (putative passenger)",
+                                         zorder=40),
+    Alteration.INFRAME: FracRect(color=MUT_COLOR_INFRAME, frac=(1., .3),
+                                 label="Inframe Mutation (putative driver)",
+                                 zorder=40),
+    Alteration.INFRAME_PASSENGER: FracRect(color=MUT_COLOR_INFRAME_PASSENGER,
+                                           frac=(1., .3),
+                                           label="Inframe Mutation (putative passenger)",
+                                           zorder=40),
     # Germline
-    Alteration.GERMLINE: FracRect(color=MUT_COLOR_GERMLINE, frac=(1., .1), label="Germline Mutation", zorder=60),
+    Alteration.GERMLINE: FracRect(color=MUT_COLOR_GERMLINE, frac=(1., .1),
+                                  label="Germline Mutation", zorder=60),
 }
-
