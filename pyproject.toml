@@ -10,14 +10,7 @@ readme = "README.md"
 classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
 requires-python = ">=3.8"
-urls = {Home="https://github.com/mr-milk/oncoprinter"}
+urls = {Home="https://github.com/heatgraphy/oncoprinter"}
 dependencies = [
     "heatgraphy"
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "sphinx",
-    "numpydoc",
 ]
