@@ -1,6 +1,6 @@
 # Oncoprinter
 
-Create Oncoprint in Python
+Create cBioPortal Oncoprint in Python
 
 ### Installation
 
